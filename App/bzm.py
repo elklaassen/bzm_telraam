@@ -5,8 +5,6 @@ import requests
 from dash import Dash, html, dash_table, dcc, callback, Output, Input
 import plotly.express as px
 import pandas_geojson as pdg
-from bs4 import BeautifulSoup
-
 
 def save_df(df, file_name):
     # Save data frame for debugging purposes
