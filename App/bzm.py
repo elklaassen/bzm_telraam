@@ -11,14 +11,15 @@ from bs4 import BeautifulSoup
 def save_df(df, file_name):
     # Save data frame for debugging purposes
     print('Saving '+ file_name)
-    df.to_excel('D:/OneDrive/Volunteer/Code for Germany/BzM/' + file_name + '.xlsx', index=False)
+    df.to_excel('Data_files/' + file_name + '.xlsx', index=False)
 
 # Initialize the app
 app = Dash(__name__)
 
 # Load data
+path = 'D:/OneDrive/PycharmProjects/bzm_telraam/Data_files/'
 print('Reading file...')
-df_sel = pd.read_excel('D:/OneDrive/PycharmProjects/bzm_telraam/Data_files/bzm_merged_all_test_read.xlsx')
+df_sel = pd.read_excel(path+'bzm_merged_all_test_read.xlsx')
 
 # Remove empty rows and set data types
 nan_rows = df_sel[df_sel['date_local'].isnull()]
