@@ -90,7 +90,6 @@ app.layout = html.Div([
         #Test: dl.Marker(position=[52.5, 13.5]),
         dl.GeoJSON(url=path + GEO_JSON_NAME, hideout=dd_defaults, id="telraam", onEachFeature= popup_telraam),
     ], style={'height': '50vh'}),
-    html.Div(id="capital"),
     dcc.Dropdown(id="dd", value=dd_defaults, options=dd_options, clearable=False, multi=True),
 
     # Time graphs
@@ -174,17 +173,8 @@ app.layout = html.Div([
 ], style={'marginBottom': 50, 'marginTop': 25}
 )
 
-#@callback(
-#    Output("telraam", "hideout"),
-#    Input("dd", "value")
-#)
-
 app.clientside_callback("function(x){return x;}", Output("telraam", "hideout"), Input("dd", "value"))
 app.server.register_blueprint(json_api)
-#@app.callback(Output("telraam", "hideout"), [Input("dd", "value")])
-#def capital_click(feature):
-#    if feature is not None:
-#        return f"You clicked {feature['properties']['name']}"
 
 @callback(
     #Output(component_id='output-container-date-picker-range', component_property='children'),
