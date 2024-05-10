@@ -4,7 +4,11 @@ import pandas as pd
 import requests
 from dash import Dash, html, dash_table, dcc, callback, Output, Input
 import plotly.express as px
+import dash_leaflet as dl
+from api import json_api
 import pandas_geojson as pdg
+from sqlalchemy import create_engine
+from dash_extensions.javascript import assign
 
 def save_df(df, file_name):
     # Save data frame for debugging purposes
@@ -15,9 +19,17 @@ def save_df(df, file_name):
 app = Dash(__name__)
 
 # Load data
-path = 'D:/OneDrive/PycharmProjects/bzm_telraam/Data_files/'
-print('Reading file...')
+path = 'D:/OneDrive/PycharmProjects/bzm_telraam/Data_files/' # Change to your project directory!
+# print('Reading file...')
 df_sel = pd.read_excel(path+'bzm_merged_all_test_read.xlsx')
+GEO_JSON_NAME = "bzm_telraam_segments.geojson"
+dd_options = [{"value": c, "label": c} for c in ["active", "non-active"]]
+dd_defaults = [o["value"] for o in dd_options]
+
+# Read from sqlalchemy
+#engine = create_engine(.....)
+#sql = "select name, age from users where name = 'joe' and age = 100"
+#df = pd.read_sql(sql,con=engine)
 
 # Remove empty rows and set data types
 nan_rows = df_sel[df_sel['date_local'].isnull()]
@@ -53,16 +65,33 @@ def add_car_speeding(data_frame):
     # df_sel_street_speeding['perc_speeding'] = df_sel_street_speeding.loc[df_sel_street_speeding['sum_60_70_speeds'].div(df_sel_street_speeding['sum_all_speeds'])]
     df_sel_street_speeding['perc_speeding'] = df_sel_street_speeding['sum_60_70_speeds']/df_sel_street_speeding['sum_all_speeds']
 
+popup_telraam = assign("""
+    function onEachFeature(feature, layer) {
+        let popupContent = `<a href="https://telraam.net/home/location/${feature.properties.segment_id}">Telraam sensor on segment ${feature.properties.segment_id}</a>`;
+        if (feature.properties.last_data_package) {
+            popupContent += `<br/><a href="/csv/segments/bzm_telraam_${feature.properties.segment_id}.csv">CSV data for segment ${feature.properties.segment_id}</a>`;
+        }
+        layer.bindPopup(popupContent);
+    }""")
 
 app.layout = html.Div([
 
     html.Div(children=[
         # Main Header
         html.H1('Berlin zählt Mobilität',
-            style={'color': 'black', 'fontSize': 32,'font-weight': 'bold', 'font-family': 'sans-serif'}),
+                style={'font-family': 'sans-serif'}),
+                #style={'color': 'black', 'fontSize': 32,'font-weight': 'bold', 'font-family': 'sans-serif'}),
         html.Br(),
         ],
     ),
+
+    dl.Map(center=(52.5, 13.55), zoom=11, children=[
+        dl.TileLayer(),
+        #Test: dl.Marker(position=[52.5, 13.5]),
+        dl.GeoJSON(url=path + GEO_JSON_NAME, hideout=dd_defaults, id="telraam", onEachFeature= popup_telraam),
+    ], style={'height': '50vh'}),
+    html.Div(id="capital"),
+    dcc.Dropdown(id="dd", value=dd_defaults, options=dd_options, clearable=False, multi=True),
 
     # Time graphs
     html.Div(children=[
@@ -125,18 +154,18 @@ app.layout = html.Div([
     html.Div(children=[
 
         # Select a period
-        html.H1('Average Traffic by Time Unit:',
-                style={'color': 'black', 'fontSize': 18, 'font-weight': 'bold', 'font-family': 'sans-serif'}),
-        html.H1('Select street and period:',
-                style={'color': 'black', 'fontSize': 18, 'font-weight': 'normal', 'font-family': 'sans-serif'}),
+        html.H2('Average Traffic by Time Unit:',
+                style={'font-family': 'sans-serif'}),
+        html.H3('Select street and period:',
+                style = {'font-family': 'sans-serif'}),
 
         dcc.RadioItems(id='time_unit',
             options=['year', 'month', 'weekday', 'day', 'hour'],
             labelStyle={'display': 'inline-block'},
             style={'color': 'black', 'fontSize': 14, 'font-weight': 'normal', 'font-family': 'sans-serif'},
             value='weekday'),
-            ],
-        ),
+        ],
+    ),
 
     # Averages figures
     dcc.Graph(id='bar_avg_traffic', figure={}),
@@ -144,6 +173,18 @@ app.layout = html.Div([
 
 ], style={'marginBottom': 50, 'marginTop': 25}
 )
+
+#@callback(
+#    Output("telraam", "hideout"),
+#    Input("dd", "value")
+#)
+
+app.clientside_callback("function(x){return x;}", Output("telraam", "hideout"), Input("dd", "value"))
+app.server.register_blueprint(json_api)
+#@app.callback(Output("telraam", "hideout"), [Input("dd", "value")])
+#def capital_click(feature):
+#    if feature is not None:
+#        return f"You clicked {feature['properties']['name']}"
 
 @callback(
     #Output(component_id='output-container-date-picker-range', component_property='children'),
@@ -167,7 +208,7 @@ def update_graph(time_division, street_name_dd, start_date, end_date):
                         x=time_division, y=['ped_total', 'bike_total', 'car_total', 'heavy_total'],
                         facet_col='street_selection',
                         category_orders={'street_selection': ['Other']},
-                        #markers='True',
+                        #tickformat
                         title=f'All traffic by {time_division}')
 
     line_all_traffic.update_layout(yaxis_title = f'Traffic count by {time_division}')
