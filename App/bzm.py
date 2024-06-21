@@ -7,14 +7,19 @@ import plotly.express as px
 import dash_leaflet as dl
 from api import json_api
 import pandas_geojson as pdg
-from sqlalchemy import create_engine
+#from sqlalchemy import create_engine
 from dash_extensions.javascript import assign
+from common import GEO_JSON_NAME
 
 def save_df(df, file_name):
     # Save data frame for debugging purposes
     print('Saving '+ file_name)
     df.to_excel('Data_files/' + file_name + '.xlsx', index=False)
 
+
+# geojson is loaded from file for performance reasons, could be transfered to pbf someday
+# see https://www.dash-leaflet.com/components/vector_layers/geojson
+deployed = __name__ != '__main__'
 # Initialize the app
 app = Dash(__name__)
 
@@ -22,7 +27,7 @@ app = Dash(__name__)
 path = 'D:/OneDrive/PycharmProjects/bzm_telraam/Data_files/' # Change to your project directory!
 # print('Reading file...')
 df_sel = pd.read_excel(path+'bzm_merged_all_test_read.xlsx')
-GEO_JSON_NAME = "bzm_telraam_segments.geojson"
+#GEO_JSON_NAME = "bzm_telraam_segments.geojson"
 dd_options = [{"value": c, "label": c} for c in ["active", "non-active"]]
 dd_defaults = [o["value"] for o in dd_options]
 
@@ -65,6 +70,13 @@ def add_car_speeding(data_frame):
     # df_sel_street_speeding['perc_speeding'] = df_sel_street_speeding.loc[df_sel_street_speeding['sum_60_70_speeds'].div(df_sel_street_speeding['sum_all_speeds'])]
     df_sel_street_speeding['perc_speeding'] = df_sel_street_speeding['sum_60_70_speeds']/df_sel_street_speeding['sum_all_speeds']
 
+
+geojson_filter = assign("""
+    function(feature, context) {
+        if (feature.properties.cameras.length == 0) return false;
+        const active = feature.properties.uptime === 0;
+        return (active && context.hideout.includes('active')) || (!active && context.hideout.includes('non-active'));
+    }""")
 popup_telraam = assign("""
     function onEachFeature(feature, layer) {
         let popupContent = `<a href="https://telraam.net/home/location/${feature.properties.segment_id}">Telraam sensor on segment ${feature.properties.segment_id}</a>`;
@@ -72,7 +84,14 @@ popup_telraam = assign("""
             popupContent += `<br/><a href="/csv/segments/bzm_telraam_${feature.properties.segment_id}.csv">CSV data for segment ${feature.properties.segment_id}</a>`;
         }
         layer.bindPopup(popupContent);
-    }""")
+   }""")
+
+#popup_ecocounter = assign("""
+#    function onEachFeature(feature, layer) {
+#        let popupContent = `<a href="https://data.eco-counter.com/public2/?id=${feature.properties.segment_id}">Eco-counter on segment ${feature.properties.segment_id}</a>` +
+#                           `<br/><a href="/csv/segments/bzm_ecocounter_${feature.properties.segment_id}.csv">CSV data for segment ${feature.properties.segment_id}</a>`;
+#        layer.bindPopup(popupContent);
+#    }""")
 
 app.layout = html.Div([
 
@@ -85,11 +104,16 @@ app.layout = html.Div([
         ],
     ),
 
-    dl.Map(center=(52.5, 13.55), zoom=11, children=[
-        dl.TileLayer(),
-        #Test: dl.Marker(position=[52.5, 13.5]),
-        dl.GeoJSON(url=path + GEO_JSON_NAME, hideout=dd_defaults, id="telraam", onEachFeature= popup_telraam),
-    ], style={'height': '50vh'}),
+    dl.Map(children=[
+        dl.TileLayer(className='bw'),
+        dl.GeoJSON(url=('/csv/' if deployed else 'assets/') + GEO_JSON_NAME,
+            filter= geojson_filter, hideout=dd_defaults, id="telraam",
+            onEachFeature= popup_telraam),
+
+        #dl.GeoJSON(url=('/csv/' if deployed else 'assets/') + 'bzm_ecocounter_segments.geojson',
+        #           id="ecocounter",
+        #           onEachFeature=popup_ecocounter)
+    ], style={'height': '50vh'}, center=(52.5, 13.55), zoom=11),
     dcc.Dropdown(id="dd", value=dd_defaults, options=dd_options, clearable=False, multi=True),
 
     # Time graphs
